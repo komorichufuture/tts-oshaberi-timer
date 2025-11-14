@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ステップ読み上げタイマー</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>ステップ読み上げタイマー</h1>
+      <p class="subtitle">1ステップごとにTTSで読み上げる作業タイマー</p>
+      <p id="tts-support-warning" class="warning hidden">
+        ※ このブラウザは音声読み上げ（TTS）に対応していないか、制限されています。
+      </p>
+    </header>
+
+    <!-- 現在のステップ表示（画面上部） -->
+    <section class="card current-step-card">
+      <h2 class="section-title">現在のステップ</h2>
+      <p id="current-step-title" class="current-step-title">まだ開始していません</p>
+      <p id="current-step-status" class="current-step-status">ステップを作成して、スタートを押してください。</p>
+    </section>
+
+    <!-- タイマーと操作ボタン（画面中央） -->
+    <section class="card timer-card">
+      <div class="timer-display" id="timer-display">00:00</div>
+      <div class="timer-label" id="timer-label">残り時間</div>
+
+      <div class="controls-row">
+        <button id="start-btn" class="btn primary-btn">スタート</button>
+        <button id="pause-btn" class="btn secondary-btn">一時停止</button>
+      </div>
+      <div class="controls-row">
+        <button id="skip-btn" class="btn secondary-btn">スキップ</button>
+        <button id="reset-btn" class="btn danger-btn">リセット</button>
+      </div>
+
+      <button id="test-voice-btn" class="btn outline-btn full-width">
+        音声テスト（TTSチェック）
+      </button>
+    </section>
+
+    <!-- ステップ編集エリア ＋ ステップ一覧（画面下部） -->
+    <section class="steps-section">
+      <div class="card add-step-card">
+        <h2 class="section-title">ステップを追加</h2>
+        <form id="add-step-form" class="add-step-form">
+          <div class="field">
+            <label for="step-name-input">作業名</label>
+            <input
+              type="text"
+              id="step-name-input"
+              placeholder="例：机を片付ける"
+              required
+            >
+          </div>
+          <div class="field">
+            <label for="step-seconds-input">時間（秒）</label>
+            <input
+              type="number"
+              id="step-seconds-input"
+              min="1"
+              max="3600"
+              value="60"
+              required
+            >
+          </div>
+          <button type="submit" class="btn primary-btn full-width">
+            ＋ ステップを追加
+          </button>
+        </form>
+      </div>
+
+      <div class="card steps-list-card">
+        <h2 class="section-title">ステップ一覧</h2>
+        <p id="no-steps-message" class="muted">
+          まだステップがありません。「ステップを追加」から登録してください。
+        </p>
+        <ul id="steps-list" class="steps-list"></ul>
+      </div>
+
+      <!-- プリセット（ユーザー保存式） -->
+      <div class="card presets-card">
+        <h2 class="section-title">プリセット</h2>
+        <p class="muted small">
+          現在のステップを「プリセット」として保存しておくと、いつでも呼び出せます。
+        </p>
+        <form id="save-preset-form" class="save-preset-form">
+          <div class="field">
+            <label for="preset-name-input">プリセット名</label>
+            <input
+              type="text"
+              id="preset-name-input"
+              placeholder="例：朝のルーティン"
+              required
+            >
+          </div>
+          <button type="submit" class="btn secondary-btn full-width">
+            現在のステップを保存
+          </button>
+        </form>
+        <p id="no-presets-message" class="muted small">
+          まだプリセットがありません。ステップを作成してから保存できます。
+        </p>
+        <ul id="presets-list" class="presets-list"></ul>
+      </div>
+
+      <!-- 実行履歴ログ -->
+      <div class="card logs-card">
+        <div class="logs-header">
+          <h2 class="section-title">実行履歴</h2>
+          <button id="clear-logs-btn" class="logs-clear-btn">
+            履歴をすべて削除
+          </button>
+        </div>
+        <p id="today-total" class="muted small">
+          今日の合計：0秒
+        </p>
+        <p id="no-logs-message" class="muted">
+          まだ履歴がありません。全ステップを完了するとここに記録されます。
+        </p>
+        <ul id="logs-list" class="logs-list"></ul>
+      </div>
+    </section>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
