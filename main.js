@@ -666,28 +666,29 @@ function startStep(index) {
 
   currentStepIndex = index;
   const step = runSteps[currentStepIndex];
+
+  // このステップの残り時間をセット
   remainingSeconds = step.seconds;
   updateTimerDisplay();
 
-  timerLabelEl.textContent = "読み上げ中...";
+  // まずタイマーを動かし始める（読み上げとは独立して動く）
+  startCountdown();
   updateCurrentStepInfoRunning();
 
+  // 読み上げる台詞は「セット情報 + ステップ名」だけにする
   const messageParts = [];
   if (step.totalSets > 1) {
-    messageParts.push(
-      `${step.setIndex}セット目。`
-    );
+    // セット数が1より多いときだけセット情報を言う
+    messageParts.push(`${step.setIndex}セット目。`);
   }
-  messageParts.push(
-    `ステップ${currentStepIndex + 1}。${step.name}を開始します。時間は${step.seconds}秒です。`
-  );
+  // ステップ名のみ（時間などは言わない）
+  messageParts.push(step.name);
   const message = messageParts.join("");
 
-  speak(message, () => {
-    if (currentStepIndex !== index || runSteps.length === 0) return;
-    startCountdown();
-  });
+  // タイマーとは無関係にTTSを再生（終了待ちしない）
+  speak(message);
 }
+
 
 function goToNextStep() {
   const nextIndex = currentStepIndex + 1;
@@ -894,3 +895,4 @@ window.addEventListener("load", () => {
   renderLogs();
   updateCurrentStepInfoIdle();
 });
+
