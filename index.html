@@ -81,6 +81,26 @@
         <ul id="steps-list" class="steps-list"></ul>
       </div>
 
+      <!-- 追加：セット数設定 -->
+      <div class="card run-config-card">
+        <h2 class="section-title">実行設定</h2>
+        <div class="field">
+          <label for="repeat-count-input">
+            セット数（同じステップ列を繰り返す回数）
+          </label>
+          <input
+            type="number"
+            id="repeat-count-input"
+            min="1"
+            max="20"
+            value="1"
+          >
+        </div>
+        <p class="muted small">
+          例：腕立て・腹筋・スクワットの3ステップを4セット行う場合は「4」と入力します。
+        </p>
+      </div>
+
       <!-- プリセット（ユーザー保存式） -->
       <div class="card presets-card">
         <h2 class="section-title">プリセット</h2>
