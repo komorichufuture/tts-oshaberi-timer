@@ -4,11 +4,14 @@
 const STORAGE_KEY_STEPS = "ttsStepTimer_steps_v1";
 const STORAGE_KEY_LOGS = "ttsStepTimer_logs_v1";
 const STORAGE_KEY_PRESETS = "ttsStepTimer_presets_v1";
+const STORAGE_KEY_REPEAT = "ttsStepTimer_repeatCount_v1";
 
 // ステート
-let steps = [];
+let steps = [];          // UI上の「1セット分」のステップ
 let logs = [];
 let presets = [];
+let runSteps = [];       // 実際に再生する展開済みステップ（steps × セット数）
+let repeatCount = 1;     // セット数
 let currentStepIndex = -1;
 let remainingSeconds = 0;
 let timerIntervalId = null;
@@ -35,6 +38,8 @@ const stepNameInput = document.getElementById("step-name-input");
 const stepSecondsInput = document.getElementById("step-seconds-input");
 const stepsListEl = document.getElementById("steps-list");
 const noStepsMessageEl = document.getElementById("no-steps-message");
+
+const repeatCountInput = document.getElementById("repeat-count-input");
 
 const savePresetForm = document.getElementById("save-preset-form");
 const presetNameInput = document.getElementById("preset-name-input");
@@ -154,7 +159,7 @@ function speak(text, onEnd) {
     utter.onend = onEnd;
   }
 
-  window.speechSynthesis.cancel(); // 前の読み上げを止める
+  window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utter);
 }
 
@@ -226,7 +231,6 @@ function loadPresetsFromStorage() {
   try {
     const data = localStorage.getItem(STORAGE_KEY_PRESETS);
     if (!data) {
-      // 初回はデフォルトプリセットをそのまま使う
       return DEFAULT_PRESETS.map((p) => ({
         id: p.id,
         name: p.name,
@@ -264,6 +268,27 @@ function loadPresetsFromStorage() {
   } catch (e) {
     console.warn("プリセットの読み込みに失敗しました", e);
     return [];
+  }
+}
+
+function saveRepeatCountToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY_REPEAT, String(repeatCount));
+  } catch (e) {
+    console.warn("セット数の保存に失敗しました", e);
+  }
+}
+
+function loadRepeatCountFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_REPEAT);
+    if (!raw) return 1;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return 1;
+    return Math.min(20, Math.floor(n));
+  } catch (e) {
+    console.warn("セット数の読み込みに失敗しました", e);
+    return 1;
   }
 }
 
@@ -322,459 +347,3 @@ function renderSteps() {
 
     stepsListEl.appendChild(li);
   });
-}
-
-function deleteStep(index) {
-  steps.splice(index, 1);
-  saveStepsToStorage();
-
-  stopTimer();
-  currentStepIndex = -1;
-  remainingSeconds = 0;
-  updateTimerDisplay();
-  updateCurrentStepInfoIdle();
-  renderSteps();
-}
-
-function updateCurrentStepInfoIdle() {
-  if (steps.length === 0) {
-    currentStepTitleEl.textContent = "まだ開始していません";
-    currentStepStatusEl.textContent =
-      "ステップを作成して、スタートを押してください。";
-  } else {
-    currentStepTitleEl.textContent = "準備完了";
-    currentStepStatusEl.textContent = "スタートでステップ1から開始します。";
-  }
-}
-
-function updateCurrentStepInfoRunning() {
-  if (currentStepIndex < 0 || currentStepIndex >= steps.length) return;
-  const step = steps[currentStepIndex];
-  currentStepTitleEl.textContent = `ステップ ${currentStepIndex + 1}：${step.name}`;
-  currentStepStatusEl.textContent = `残り ${remainingSeconds} 秒`;
-}
-
-function updateCurrentStepInfoFinished() {
-  currentStepTitleEl.textContent = "完了";
-  currentStepStatusEl.textContent = "全てのステップが終了しました。";
-}
-
-// -------- プリセット表示 --------
-function renderPresets() {
-  presetsListEl.innerHTML = "";
-
-  if (!presets || presets.length === 0) {
-    noPresetsMessageEl.classList.remove("hidden");
-    return;
-  }
-  noPresetsMessageEl.classList.add("hidden");
-
-  presets.forEach((preset) => {
-    const li = document.createElement("li");
-    li.className = "preset-item";
-
-    const main = document.createElement("div");
-    main.className = "preset-main";
-
-    const title = document.createElement("div");
-    title.className = "preset-title";
-    title.textContent = preset.name;
-
-    const totalSteps = preset.steps.length;
-    const totalSeconds = preset.steps.reduce(
-      (sum, s) => sum + (Number(s.seconds) || 0),
-      0
-    );
-
-    const meta = document.createElement("div");
-    meta.className = "preset-meta";
-    meta.textContent = `${totalSteps}ステップ / 合計 ${formatSeconds(
-      totalSeconds
-    )}`;
-
-    main.appendChild(title);
-    main.appendChild(meta);
-
-    const actions = document.createElement("div");
-    actions.className = "preset-actions";
-
-    const loadBtn = document.createElement("button");
-    loadBtn.className = "preset-load-btn";
-    loadBtn.textContent = "読込";
-    loadBtn.addEventListener("click", () => {
-      applyPreset(preset.id);
-    });
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "preset-delete-btn";
-    deleteBtn.textContent = "削除";
-    deleteBtn.addEventListener("click", () => {
-      deletePreset(preset.id);
-    });
-
-    actions.appendChild(loadBtn);
-    actions.appendChild(deleteBtn);
-
-    li.appendChild(main);
-    li.appendChild(actions);
-    presetsListEl.appendChild(li);
-  });
-}
-
-function applyPreset(presetId) {
-  const preset = presets.find((p) => p.id === presetId);
-  if (!preset) return;
-
-  const ok = window.confirm(
-    `"${preset.name}" の内容で現在のステップを上書きします。よろしいですか？`
-  );
-  if (!ok) return;
-
-  stopTimer();
-  if (ttsSupported) {
-    window.speechSynthesis.cancel();
-  }
-  currentStepIndex = -1;
-  remainingSeconds = 0;
-  updateTimerDisplay();
-  timerLabelEl.textContent = "残り時間";
-
-  steps = preset.steps.map((s) => ({
-    name: s.name,
-    seconds: s.seconds
-  }));
-
-  saveStepsToStorage();
-  renderSteps();
-  updateCurrentStepInfoIdle();
-}
-
-function deletePreset(presetId) {
-  const preset = presets.find((p) => p.id === presetId);
-  if (!preset) return;
-
-  const ok = window.confirm(
-    `プリセット "${preset.name}" を削除します。よろしいですか？`
-  );
-  if (!ok) return;
-
-  presets = presets.filter((p) => p.id !== presetId);
-  savePresetsToStorage();
-  renderPresets();
-}
-
-// -------- ログ表示／集計 --------
-function renderLogs() {
-  logsListEl.innerHTML = "";
-
-  if (!logs || logs.length === 0) {
-    noLogsMessageEl.classList.remove("hidden");
-    updateTodayTotal();
-    return;
-  }
-  noLogsMessageEl.classList.add("hidden");
-
-  logs.forEach((log) => {
-    const li = document.createElement("li");
-    li.className = "log-item";
-
-    const main = document.createElement("div");
-    main.className = "log-main";
-
-    const totalSec = Number(log.totalSeconds) || 0;
-    const totalSteps = Number(log.totalSteps) || 0;
-    const title = log.title || "ステップタイマー";
-
-    main.textContent = `${title}（${totalSteps}ステップ / ${formatSeconds(
-      totalSec
-    )}）`;
-
-    const meta = document.createElement("div");
-    meta.className = "log-meta";
-
-    const timePart = log.time || "";
-    const memoPart =
-      log.memo && log.memo.trim() ? `メモ：${log.memo.trim()}` : "";
-
-    meta.textContent = memoPart ? `${timePart}　${memoPart}` : timePart;
-
-    li.appendChild(main);
-    li.appendChild(meta);
-    logsListEl.appendChild(li);
-  });
-
-  updateTodayTotal();
-}
-
-function updateTodayTotal() {
-  const todayISO = getTodayISO();
-  if (!logs || logs.length === 0) {
-    todayTotalEl.textContent = "今日の合計：0秒";
-    return;
-  }
-
-  let totalSecondsToday = 0;
-  let count = 0;
-  logs.forEach((log) => {
-    if (log.dateISO === todayISO) {
-      totalSecondsToday += Number(log.totalSeconds) || 0;
-      count += 1;
-    }
-  });
-
-  if (count === 0) {
-    todayTotalEl.textContent = "今日の合計：0秒";
-  } else {
-    todayTotalEl.textContent = `今日の合計：${formatDurationJa(
-      totalSecondsToday
-    )}（${count}セッション）`;
-  }
-}
-
-function addLogEntry() {
-  if (steps.length === 0) return;
-
-  const totalSteps = steps.length;
-  const totalSeconds = steps.reduce((sum, s) => sum + s.seconds, 0);
-  const title = steps[0]?.name || "ステップタイマー";
-
-  const now = new Date();
-  const timeString = `${now.getFullYear()}/${pad2(
-    now.getMonth() + 1
-  )}/${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(
-    now.getMinutes()
-  )}`;
-
-  // メモ入力（任意）
-  const memo = window.prompt(
-    "今回のセッションのメモを入力（任意・空欄可）：",
-    ""
-  );
-
-  const entry = {
-    title,
-    totalSteps,
-    totalSeconds,
-    time: timeString,
-    dateISO: getTodayISO(),
-    memo: memo || ""
-  };
-
-  logs.unshift(entry);
-  if (logs.length > 20) {
-    logs = logs.slice(0, 20);
-  }
-  saveLogsToStorage();
-  renderLogs();
-}
-
-// -------- タイマー処理 --------
-function startCountdown() {
-  stopTimer();
-  timerLabelEl.textContent = "残り時間";
-  timerIntervalId = window.setInterval(() => {
-    remainingSeconds -= 1;
-    if (remainingSeconds <= 0) {
-      remainingSeconds = 0;
-      updateTimerDisplay();
-      stopTimer();
-      goToNextStep();
-    } else {
-      updateTimerDisplay();
-      updateCurrentStepInfoRunning();
-    }
-  }, 1000);
-}
-
-function stopTimer() {
-  if (timerIntervalId !== null) {
-    clearInterval(timerIntervalId);
-    timerIntervalId = null;
-  }
-}
-
-function startStep(index) {
-  if (index < 0 || index >= steps.length) return;
-
-  currentStepIndex = index;
-  const step = steps[currentStepIndex];
-  remainingSeconds = step.seconds;
-  updateTimerDisplay();
-
-  timerLabelEl.textContent = "読み上げ中...";
-  updateCurrentStepInfoRunning();
-
-  const message = `ステップ${currentStepIndex + 1}。${step.name}を開始します。時間は${step.seconds}秒です。`;
-
-  speak(message, () => {
-    if (currentStepIndex !== index || steps.length === 0) return;
-    startCountdown();
-  });
-}
-
-function goToNextStep() {
-  const nextIndex = currentStepIndex + 1;
-  if (nextIndex < steps.length) {
-    startStep(nextIndex);
-  } else {
-    currentStepIndex = -1;
-    timerLabelEl.textContent = "完了";
-    updateCurrentStepInfoFinished();
-    speak("全てのステップが完了しました。お疲れさまでした。");
-
-    addLogEntry();
-  }
-}
-
-// -------- イベントハンドラ --------
-addStepForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const name = stepNameInput.value.trim();
-  const seconds = Number(stepSecondsInput.value);
-
-  if (!name) {
-    alert("作業名を入力してください。");
-    return;
-  }
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    alert("時間は1秒以上で入力してください。");
-    return;
-  }
-
-  steps.push({
-    name,
-    seconds: Math.floor(seconds)
-  });
-
-  stepNameInput.value = "";
-  stepSecondsInput.value = "60";
-
-  saveStepsToStorage();
-  renderSteps();
-  updateCurrentStepInfoIdle();
-});
-
-startBtn.addEventListener("click", () => {
-  if (steps.length === 0) {
-    alert(
-      "まずステップを追加するか、プリセットから読み込んでください。"
-    );
-    return;
-  }
-
-  if (currentStepIndex >= 0 && remainingSeconds > 0 && timerIntervalId === null) {
-    startCountdown();
-    updateCurrentStepInfoRunning();
-    return;
-  }
-
-  startStep(0);
-});
-
-pauseBtn.addEventListener("click", () => {
-  stopTimer();
-  if (ttsSupported) {
-    window.speechSynthesis.cancel();
-  }
-  if (currentStepIndex >= 0 && currentStepIndex < steps.length) {
-    currentStepStatusEl.textContent = "一時停止中";
-  }
-});
-
-resetBtn.addEventListener("click", () => {
-  stopTimer();
-  if (ttsSupported) {
-    window.speechSynthesis.cancel();
-  }
-  currentStepIndex = -1;
-  remainingSeconds = 0;
-  updateTimerDisplay();
-  timerLabelEl.textContent = "残り時間";
-  updateCurrentStepInfoIdle();
-});
-
-skipBtn.addEventListener("click", () => {
-  if (steps.length === 0) return;
-  if (currentStepIndex === -1) {
-    startStep(0);
-    return;
-  }
-  stopTimer();
-  if (ttsSupported) {
-    window.speechSynthesis.cancel();
-  }
-  goToNextStep();
-});
-
-testVoiceBtn.addEventListener("click", () => {
-  const sampleText =
-    "これはテストです。ステップ読み上げタイマーの音声確認を行っています。";
-  speak(sampleText);
-});
-
-// プリセット保存
-savePresetForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const name = presetNameInput.value.trim();
-  if (!name) {
-    alert("プリセット名を入力してください。");
-    return;
-  }
-  if (steps.length === 0) {
-    alert("保存するステップがありません。");
-    return;
-  }
-
-  const existingIndex = presets.findIndex((p) => p.name === name);
-  if (existingIndex >= 0) {
-    const ok = window.confirm(
-      `同じ名前のプリセット "${name}" が存在します。上書きしますか？`
-    );
-    if (!ok) return;
-
-    presets[existingIndex].steps = steps.map((s) => ({
-      name: s.name,
-      seconds: s.seconds
-    }));
-  } else {
-    const id = `user-${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 6)}`;
-    presets.push({
-      id,
-      name,
-      steps: steps.map((s) => ({
-        name: s.name,
-        seconds: s.seconds
-      }))
-    });
-  }
-
-  presetNameInput.value = "";
-  savePresetsToStorage();
-  renderPresets();
-});
-
-// 履歴削除
-clearLogsBtn.addEventListener("click", () => {
-  if (!logs || logs.length === 0) return;
-  const ok = window.confirm("履歴をすべて削除します。よろしいですか？");
-  if (!ok) return;
-  logs = [];
-  saveLogsToStorage();
-  renderLogs();
-});
-
-// 初期化
-window.addEventListener("load", () => {
-  initVoices();
-  steps = loadStepsFromStorage();
-  logs = loadLogsFromStorage();
-  presets = loadPresetsFromStorage();
-
-  updateTimerDisplay();
-  renderSteps();
-  renderPresets();
-  renderLogs();
-  updateCurrentStepInfoIdle();
-});
